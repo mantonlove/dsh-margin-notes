@@ -33,6 +33,9 @@
 
 <div id="bottomDoc" data-textpreview-url="dsh-resource://file/session/sess-1/bottom.md" style="position:fixed;left:20px;right:20px;bottom:4px;padding:2px;border:1px dashed #555">底部一段文字，选区贴着视口底边。</div>
 
+<div id="hiddenComposerWrap" data-composer-card style="display:none">
+  <div id="hiddenComposer" data-composer-input contenteditable="true">隐藏输入框</div>
+</div>
 <div id="composerWrap" data-composer-card>
   <div id="composer" data-composer-input contenteditable="true">输入框里的文字也不该触发批注。</div>
 </div>
@@ -62,7 +65,13 @@
     uiSession: { adapter: { current: { getSnapshot: function () { return { key: 'sess-1' } }, subscribe: function () { return function () {} } } } },
     sessions: { scope: function (id) { return { id: id } }, list: { getSnapshot: function () { return { current: 'sess-1', items: [] } } } },
     conversation: { input: { for: function () { return shell } } },
-    locale: { getSnapshot: function () { return { active: 'zh' } } },
+    locale: {
+      getSnapshot: function () { return { active: window.__lang || 'zh' } },
+      subscribe: function (fn) {
+        ;(window.__localeSubs || (window.__localeSubs = [])).push(fn)
+        return function () {}
+      },
+    },
   }
 
   // ---- fake better-sidebar selection popup ("Add to conversation") -------
@@ -225,6 +234,14 @@
       await wait(140)
       assert('no ghost pill after saving (waits for a fresh click)', toolbarButton() === null)
 
+      // 2c) a locale switch repaints labels instead of freezing the mount-time one
+      window.__lang = 'en'
+      window.__localeSubs.forEach(function (fn) { fn() })
+      assert('badge follows a locale switch', badge() !== null && badge().textContent.indexOf('Annotations') >= 0, badge() ? badge().textContent : 'no badge')
+      window.__lang = 'zh'
+      window.__localeSubs.forEach(function (fn) { fn() })
+      assert('badge returns to Chinese', badge() !== null && badge().textContent.indexOf('批注') >= 0, badge() ? badge().textContent : 'no badge')
+
       // 3) second annotation in another paragraph
       assert('select second paragraph', selectText(document.getElementById('p2'), '样本量偏小'))
       await wait(80)
@@ -234,6 +251,21 @@
       popover().querySelector('.dsba-btn-primary').click()
       await wait(60)
       assert('badge shows 2 annotations', badge() !== null && badge().textContent.indexOf('2') >= 0, badge() ? badge().textContent : 'no badge')
+
+      // 3b) Esc in the popover must not let the next keyup resurrect the pill
+      assert('select text for the Esc regression', selectText(document.getElementById('p1'), '证据不足'))
+      await wait(80)
+      toolbarButton().click()
+      await wait(40)
+      var escArea = popover().querySelector('textarea')
+      // Dismiss while the user's highlight is still there: the textarea only
+      // borrowed focus, so the selection is restored before Escape.
+      assert('restore the selection before Escape', selectQuietly(document.getElementById('p1'), '证据不足'))
+      escArea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      document.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }))
+      await wait(140)
+      assert('Esc closes the popover', popover() === null)
+      assert('Esc keeps the pill suppressed through the following keyup', toolbarButton() === null)
 
       // 4) persistence
       var stored = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
@@ -282,6 +314,9 @@
       var sendBtn = document.querySelector('.dsba-panel .dsba-btn-primary')
       sendBtn.click()
       await wait(80)
+      assert('send focuses the visible composer, not a hidden pane',
+        document.activeElement === document.getElementById('composer'),
+        document.activeElement ? document.activeElement.id || document.activeElement.tagName : 'none')
       var draft = window.__draft
       assert('draft received the block header', draft.indexOf('【批注 · 请逐条回应】文档：draft.md') === 0, JSON.stringify(draft.slice(0, 40)))
       assert('draft has numbered items in order', draft.indexOf('1. 原文：「证据不足」') >= 0 && draft.indexOf('2. 原文：「样本量偏小」') >= 0, JSON.stringify(draft))

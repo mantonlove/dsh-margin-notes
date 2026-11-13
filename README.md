@@ -102,10 +102,10 @@ github:mantonlove/dsh-margin-notes             # 直接从仓库装（需你的 
 
 ```
 node --test test/contract.test.mjs      # 12 项：App 侧加载合约（manifest / 注册 / 服务名 / 补丁）
-node --test test/format.test.mjs        # 10 项：纯函数（选区过滤、块拼装、存储、locale）
-node --test test/placement.test.mjs     # 7 项：浮层落点（默认在下、底边翻上、避让宿主胶囊、横向夹取）
+node --test test/format.test.mjs        # 13 项：纯函数（选区过滤、块拼装、存储、locale）
+node --test test/placement.test.mjs     # 10 项：浮层落点与徽标夹取（默认在下、底边翻上、避让宿主胶囊、横向夹取）
 python3 -m http.server 8732             # 在包根目录起服务
-open http://127.0.0.1:8732/test/harness.html   # 57 项：真实浏览器里跑完整交互（含胶囊避让、清单二次编辑、幽灵胶囊回归、热替换幂等）
+open http://127.0.0.1:8732/test/harness.html   # 64 项：真实浏览器里跑完整交互（含胶囊避让、清单二次编辑、幽灵胶囊回归、语言切换、热替换幂等）
 ```
 
 - `test/contract.test.mjs` 把 App 0.2.1-rc.3 自己的加载规则钉成断言：`dsh.client.platform === 'web'`、`exports["./client"]` 必须存在、注册 id 必须等于包名、`cordis.patch.yml` 的 insert 行、四个 Cordis 服务名。规则出处见 `docs/install-and-verify.md` 的「加载合约」表。
@@ -117,8 +117,23 @@ open http://127.0.0.1:8732/test/harness.html   # 57 项：真实浏览器里跑�
 ## 已知边界
 
 - PDF / 图片预览里的文字选区取决于预览器是否为 DOM 文本；canvas 渲染的 PDF、以及塞进 iframe 的 HTML 预览选不中（跨文档拿不到选区）。
-- 只处理文档区域；对话消息里的选区仍走 DSH 自身的「引用」能力。
+- 只处理文档与助手回复；用户消息、工具卡片与输入框里的选区不触发（避免和 DSH 自带的「引用」重复）。
 - 批注不做正文内联高亮（避免与编辑器重渲染冲突），定位用清单里的 `↗`。
+
+## 变更记录
+
+### 0.1.2
+
+- 修复：发送后延迟聚焦输入框会抢走刚划的新选区，表现为批注胶囊不出现或点了没反应（harness 偶发失败的根因）。
+- 修复：窗口较矮时徽标会跟着文档面板下移、压到输入框；现在固定在窗口右下角并做边界夹取。
+- 改进：运行中切换界面语言，徽标与清单文案即时跟随（此前只在挂载时读一次 locale）。
+- 改进：多个面板同时挂载时，焦点交给可见的那个输入框。
+- 改进：浮层、清单、徽标与提示补上 `role` / `aria-label`，读屏能播报批注条数与操作按钮。
+- 测试：单测 35 项、浏览器 harness 64 项；文档计数与当前 App / better-sidebar 版本同步。
+
+### 0.1.1
+
+首个发布。
 
 ## License
 

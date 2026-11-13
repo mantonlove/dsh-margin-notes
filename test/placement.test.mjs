@@ -38,7 +38,7 @@ vm.runInContext(code, sandbox)
 const plugin = factory(() => {
   throw new Error('client bundle must not require host modules')
 })
-const { planToolbarPlacement, toolbarBox } = plugin.__test
+const { planToolbarPlacement, toolbarBox, badgeOffset } = plugin.__test
 
 const SIZE = { width: 96, height: 28 }
 const VIEWPORT = { width: 1280, height: 800 }
@@ -112,4 +112,22 @@ test('toolbarBox follows the translate(-50%, -100%) transform', () => {
   assert.equal(above.right, 508)
   assert.equal(above.top, 272)
   assert.equal(above.bottom, 300)
+})
+
+test('badge keeps the window corner, 96px above the composer', () => {
+  const offset = badgeOffset(VIEWPORT, SIZE)
+  assert.equal(offset.right, 16)
+  assert.equal(offset.bottom, 96)
+})
+
+test('badge clamps into a short viewport instead of sliding over the composer', () => {
+  const tiny = badgeOffset({ width: 200, height: 120 }, SIZE)
+  assert.equal(tiny.right, 16)
+  assert.equal(tiny.bottom, 80) // 120 - 28 - 12
+})
+
+test('badge clamps its right offset on a narrow viewport', () => {
+  const narrow = badgeOffset({ width: 100, height: 800 }, SIZE)
+  assert.equal(narrow.right, 12)
+  assert.equal(narrow.bottom, 96)
 })
