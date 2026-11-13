@@ -1,0 +1,7 @@
+# dsh-margin-notes: client-only plugin.
+# The browser half (client.js) is loaded through package.json dsh.client;
+# the node half (lib/index.js) is an empty roster entry so the bundle patch
+# has a valid Cordis plugin row to insert.
+- insert:
+    - id: dsh-margin-notes
+      name: 'dsh-margin-notes'

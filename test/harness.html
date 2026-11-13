@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>dsba harness</title>
+<style>
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 24px; background:#141418; color:#eee; }
+  #doc, #chat, #composerWrap { border:1px dashed #555; padding: 12px 16px; margin-bottom: 14px; max-width: 520px; }
+  #doc { border-color:#4f8cff; }
+  #composer { min-height: 48px; border:1px solid #444; padding:6px 8px; }
+  #log { background:#0c0c0f; border:1px solid #333; padding:10px; font:12px/1.5 ui-monospace,monospace; white-space:pre-wrap; }
+  .pass { color:#6ee7a0 } .fail { color:#ff8080 }
+</style>
+</head>
+<body>
+<h1>dsh-margin-notes harness</h1>
+
+<div id="doc" data-dsh-panel-host data-resource-url="dsh-resource://file/session/sess-1/docs/draft.md">
+  <h3>draft.md</h3>
+  <p id="p1">第一段：这个结论的证据不足，需要补充对照组。</p>
+  <p id="p2">第二段：样本量偏小，建议扩大样本。</p>
+</div>
+
+<div id="chat" data-chat-flow>
+  <div id="chatrow" data-chat-flow-kind="assistant-step" data-chat-turn="2" data-time-hover-root>
+    <p id="c1">助手回复第一段：这个研究方向值得继续。</p>
+    <p id="c2">助手回复第二段：样本还需要扩大。</p>
+  </div>
+  <div id="userrow" data-chat-flow-kind="user" data-chat-turn="3">
+    <p id="u1">用户自己说的话不该被批注。</p>
+  </div>
+</div>
+
+<div id="bottomDoc" data-textpreview-url="dsh-resource://file/session/sess-1/bottom.md" style="position:fixed;left:20px;right:20px;bottom:4px;padding:2px;border:1px dashed #555">底部一段文字，选区贴着视口底边。</div>
+
+<div id="composerWrap" data-composer-card>
+  <div id="composer" data-composer-input contenteditable="true">输入框里的文字也不该触发批注。</div>
+</div>
+
+<pre id="log">running…</pre>
+
+<script>
+  // fresh queue every run
+  try { window.localStorage.clear() } catch (err) {}
+
+  // ---- fake host services -------------------------------------------------
+  window.__draft = ''
+  window.__submitted = false
+
+  var shell = {
+    state: { getSnapshot: function () { return { draft: window.__draft, draftRev: 1, attachmentIds: [] } } },
+    setDraft: function (text) { window.__draft = text },
+    requestDraftInitialization: function () { return 'applied' },
+    actions: {
+      captureInsertion: function () { return { start: window.__draft.length, end: window.__draft.length, draftRev: 1 } },
+      insertText: function (text) { window.__draft += text; return true },
+    },
+    submit: function () { window.__submitted = true },
+  }
+
+  window.__ctx = {
+    uiSession: { adapter: { current: { getSnapshot: function () { return { key: 'sess-1' } }, subscribe: function () { return function () {} } } } },
+    sessions: { scope: function (id) { return { id: id } }, list: { getSnapshot: function () { return { current: 'sess-1', items: [] } } } },
+    conversation: { input: { for: function () { return shell } } },
+    locale: { getSnapshot: function () { return { active: 'zh' } } },
+  }
+
+  // ---- fake better-sidebar selection popup ("Add to conversation") -------
+  // better-sidebar portals <button class="<hash>_selectionPopup"> at the
+  // selection centre, transform translate(-50%, calc(-100% - 8px)) — i.e. the
+  // button hangs 8px ABOVE the selected text, exactly where our pill used to
+  // land. Mounted asynchronously after the gesture, like the real one.
+  window.__selRect = null
+  function hideHostPill() {
+    var old = document.querySelector('.fakeHostSelectionPopup')
+    if (old !== null) old.remove()
+  }
+  function showHostPill(rect) {
+    hideHostPill()
+    var btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'nArs4W_selectionPopup fakeHostSelectionPopup'
+    btn.textContent = 'Add to conversation'
+    btn.style.position = 'fixed'
+    btn.style.zIndex = '60'
+    btn.style.left = rect.left + rect.width / 2 + 'px'
+    btn.style.top = rect.top + 'px'
+    btn.style.transform = 'translate(-50%, calc(-100% - 8px))'
+    btn.style.height = '28px'
+    btn.style.padding = '0 10px'
+    btn.style.background = '#2a2a30'
+    btn.style.color = '#eee'
+    btn.style.border = '1px solid rgba(255,255,255,.14)'
+    btn.style.borderRadius = '999px'
+    btn.style.whiteSpace = 'nowrap'
+    btn.addEventListener('mousedown', function (e) { e.preventDefault() })
+    document.body.appendChild(btn)
+    return btn
+  }
+  document.addEventListener('mousedown', function (e) {
+    var pill = document.querySelector('.fakeHostSelectionPopup')
+    if (pill !== null && !pill.contains(e.target)) hideHostPill()
+  }, true)
+
+  window.__ModuleLoader__ = { load: function (spec) { window.__spec = spec } }
+</script>
+<script src="../lib/client.js"></script>
+<script>
+  (async function () {
+    var out = []
+    function assert(name, cond, extra) {
+      out.push((cond ? 'PASS ' : 'FAIL ') + name + (extra ? ' :: ' + extra : ''))
+      render()
+    }
+    function render() {
+      var passed = out.filter(function (l) { return l.indexOf('PASS') === 0 }).length
+      var failed = out.filter(function (l) { return l.indexOf('FAIL') === 0 }).length
+      document.getElementById('log').textContent = out.join('\n') + '\n\nRESULT ' + passed + ' passed, ' + failed + ' failed'
+      document.title = failed === 0 ? 'HARNESS PASS' : 'HARNESS FAIL'
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms) }) }
+    function selectText(el, needle) {
+      var node = null
+      for (var i = 0; i < el.childNodes.length; i++) {
+        if (el.childNodes[i].nodeType === 3) { node = el.childNodes[i]; break }
+      }
+      if (node === null) return false
+      var idx = node.nodeValue.indexOf(needle)
+      if (idx < 0) return false
+      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      var range = document.createRange()
+      range.setStart(node, idx)
+      range.setEnd(node, idx + needle.length)
+      var sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      window.__selRect = range.getBoundingClientRect()
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      var annotatable = el.closest('#doc') !== null || el.id === 'bottomDoc'
+      if (annotatable) {
+        var rect = window.__selRect
+        window.setTimeout(function () { showHostPill(rect) }, 40)
+      }
+      return true
+    }
+    /** Select text without mousedown/mouseup, as a re-render or host would. */
+    function selectQuietly(el, needle) {
+      var node = null
+      for (var i = 0; i < el.childNodes.length; i++) {
+        if (el.childNodes[i].nodeType === 3) { node = el.childNodes[i]; break }
+      }
+      if (node === null) return false
+      var idx = node.nodeValue.indexOf(needle)
+      if (idx < 0) return false
+      var range = document.createRange()
+      range.setStart(node, idx)
+      range.setEnd(node, idx + needle.length)
+      var sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      return true
+    }
+    function toolbarButton() { return document.querySelector('.dsba-toolbar .dsba-toolbar-btn') }
+    function badge() { return document.querySelector('.dsba-badge') }
+    function popover() { return document.querySelector('.dsba-popover') }
+
+    async function settleWindow() {
+      // The agent window finishes sizing itself right after load; a resize
+      // hides the pill by design, so wait until the viewport stops moving.
+      var last = ''
+      var stable = 0
+      for (var i = 0; i < 40; i++) {
+        var now = window.innerWidth + 'x' + window.innerHeight
+        stable = now === last ? stable + 1 : 0
+        last = now
+        if (stable >= 3) return
+        await wait(80)
+      }
+    }
+
+    try {
+      await settleWindow()
+      var spec = window.__spec
+      assert('bundle registered through __ModuleLoader__', !!spec && typeof spec.factory === 'function')
+      var plugin = spec.factory(function () { throw new Error('no host requires expected') })
+      assert('plugin exposes name/inject/apply', plugin.name === 'dsh-margin-notes' && Array.isArray(plugin.inject) && typeof plugin.apply === 'function', 'inject=' + (plugin.inject || []).join(','))
+      var dispose = plugin.apply(window.__ctx)
+      assert('apply() returns a disposer', typeof dispose === 'function')
+
+      // 1) select inside the document → toolbar
+      assert('select in document root', selectText(document.getElementById('p1'), '证据不足'))
+      await wait(80)
+      assert('toolbar shown for document selection', toolbarButton() !== null)
+
+      // 1b) regression for the reported overlap: the host pill mounts above the
+      // selection at the same centre; ours must keep clear of it.
+      await wait(380)
+      var hostPill = document.querySelector('.fakeHostSelectionPopup')
+      assert('host \"Add to conversation\" pill is mounted', hostPill !== null)
+      var tbRect = document.querySelector('.dsba-toolbar').getBoundingClientRect()
+      var pillRect = hostPill.getBoundingClientRect()
+      function overlapping(a, b) {
+        return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+      }
+      assert('annotate pill does not overlap the host pill', !overlapping(tbRect, pillRect),
+        JSON.stringify({ ours: [tbRect.left, tbRect.top, tbRect.right, tbRect.bottom], host: [pillRect.left, pillRect.top, pillRect.right, pillRect.bottom] }))
+      assert('annotate pill sits below the selection while the host pill sits above', tbRect.top >= window.__selRect.bottom - 1,
+        'ours.top=' + tbRect.top + ' selection.bottom=' + window.__selRect.bottom)
+
+      // 2) open popover and save an annotation
+      toolbarButton().click()
+      await wait(50)
+      assert('popover opened', popover() !== null)
+      var ta = popover().querySelector('textarea')
+      ta.value = '这里需要补一篇 2023 年的文献'
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(60)
+      assert('badge appears with 1 annotation', badge() !== null && badge().textContent.indexOf('1') >= 0, badge() ? badge().textContent : 'no badge')
+      assert('popover closed after save', popover() === null)
+
+      // 2b) a restored selection must not resurrect the pill after saving:
+      // only a fresh click in the document may show it again.
+      assert('restore selection without a gesture', selectQuietly(document.getElementById('p1'), '证据不足'))
+      document.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }))
+      await wait(140)
+      assert('no ghost pill after saving (waits for a fresh click)', toolbarButton() === null)
+
+      // 3) second annotation in another paragraph
+      assert('select second paragraph', selectText(document.getElementById('p2'), '样本量偏小'))
+      await wait(80)
+      toolbarButton().click()
+      await wait(40)
+      popover().querySelector('textarea').value = ''
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(60)
+      assert('badge shows 2 annotations', badge() !== null && badge().textContent.indexOf('2') >= 0, badge() ? badge().textContent : 'no badge')
+
+      // 4) persistence
+      var stored = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
+      assert('queue persisted per session', stored.length === 2, 'stored=' + stored.length)
+
+      // 5) panel list
+      badge().click()
+      await wait(50)
+      var rows = document.querySelectorAll('.dsba-panel .dsba-item')
+      assert('panel lists both annotations', rows.length === 2, 'rows=' + rows.length)
+
+      // 5b) edit a queued annotation in place
+      var editBtn = rows[0].querySelector('.dsba-edit-btn')
+      assert('queued annotation has an edit button', editBtn !== null)
+      editBtn.click()
+      await wait(40)
+      var editNote = document.querySelector('.dsba-panel .dsba-edit-note')
+      assert('edit mode shows a prefilled textarea',
+        editNote !== null && editNote.value === '这里需要补一篇 2023 年的文献',
+        editNote === null ? 'no textarea' : editNote.value)
+      editNote.value = '补一篇 2023 年之后的文献（二次编辑）'
+      document.querySelector('.dsba-panel .dsba-edit-save').click()
+      await wait(40)
+      var editedRows = document.querySelectorAll('.dsba-panel .dsba-item')
+      assert('panel repaints with the edited note',
+        editedRows[0].textContent.indexOf('二次编辑') >= 0, editedRows[0].textContent)
+      assert('edit mode closes after save', document.querySelector('.dsba-panel .dsba-edit-note') === null)
+      var storedAfterEdit = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
+      assert('edited note is persisted', storedAfterEdit[0].note.indexOf('二次编辑') >= 0, storedAfterEdit[0].note)
+
+      // 5c) Esc cancels the edit and leaves the note untouched
+      var rows2 = document.querySelectorAll('.dsba-panel .dsba-item')
+      rows2[1].querySelector('.dsba-edit-btn').click()
+      await wait(40)
+      var editNote2 = document.querySelector('.dsba-panel .dsba-edit-note')
+      assert('second annotation is editable too', editNote2 !== null)
+      editNote2.value = '这段不该被保存'
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await wait(40)
+      assert('Esc cancels editing but keeps the panel', document.querySelector('.dsba-panel') !== null &&
+        document.querySelector('.dsba-panel .dsba-edit-note') === null)
+      var storedAfterCancel = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
+      assert('cancelled edit does not change the note', storedAfterCancel[1].note === '', JSON.stringify(storedAfterCancel[1].note))
+
+      // 6) send to composer
+      var sendBtn = document.querySelector('.dsba-panel .dsba-btn-primary')
+      sendBtn.click()
+      await wait(80)
+      var draft = window.__draft
+      assert('draft received the block header', draft.indexOf('【批注 · 请逐条回应】文档：draft.md') === 0, JSON.stringify(draft.slice(0, 40)))
+      assert('draft has numbered items in order', draft.indexOf('1. 原文：「证据不足」') >= 0 && draft.indexOf('2. 原文：「样本量偏小」') >= 0, JSON.stringify(draft))
+      assert('note-less annotation gets the placeholder note', draft.indexOf('（无文字，仅标记此段）') >= 0)
+      assert('draft carries the edited note text', draft.indexOf('补一篇 2023 年之后的文献（二次编辑）') >= 0)
+      assert('draft ends with the closing mark', draft.trim().endsWith('【批注结束】'))
+      assert('badge cleared after send', badge() === null)
+      assert('queue cleared after send', JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]').length === 0)
+
+      // 7) assistant replies are annotatable too (same queue, mixed sources)
+      assert('select assistant reply', selectText(document.getElementById('c1'), '研究方向值得继续'))
+      await wait(80)
+      assert('toolbar shown for assistant reply', toolbarButton() !== null)
+      toolbarButton().click()
+      await wait(50)
+      popover().querySelector('textarea').value = '这句太绝对，改成可能值得继续'
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(60)
+      assert('badge counts the reply annotation', badge() !== null && badge().textContent.indexOf('1') >= 0, badge() ? badge().textContent : 'no badge')
+      var chatStored = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
+      assert('reply annotation records kind=chat and the turn label',
+        chatStored.length === 1 && chatStored[0].kind === 'chat' && chatStored[0].doc === 'DSH 回复 · 第 2 轮',
+        JSON.stringify(chatStored))
+
+      // 7a) the user's own message stays non-annotatable
+      assert('select user message', selectText(document.getElementById('u1'), '用户自己说的话'))
+      await wait(80)
+      assert('no toolbar for the user message', toolbarButton() === null)
+
+      // 7b) a document annotation joins the same batch
+      assert('select document text for the mixed batch', selectText(document.getElementById('p1'), '证据不足'))
+      await wait(80)
+      toolbarButton().click()
+      await wait(40)
+      popover().querySelector('textarea').value = '文档这段也要改'
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(60)
+      assert('badge shows both sources', badge() !== null && badge().textContent.indexOf('2') >= 0, badge() ? badge().textContent : 'no badge')
+
+      // 7c) the pill must sit in the BOTTOM-right corner. Regressed once to
+      // `right: innerWidth - 16` / `bottom: innerHeight - 96`, which parked it
+      // against the top-left edge, half off-screen.
+      var badgeBox = badge().getBoundingClientRect()
+      assert('badge sits in the bottom-right corner inside the viewport',
+        badgeBox.left >= 0 && badgeBox.top >= 0 &&
+        badgeBox.right <= window.innerWidth + 1 && badgeBox.bottom <= window.innerHeight + 1 &&
+        window.innerWidth - badgeBox.right < 60 && window.innerHeight - badgeBox.bottom < 140,
+        JSON.stringify({ box: [badgeBox.left, badgeBox.top, badgeBox.right, badgeBox.bottom], vp: [window.innerWidth, window.innerHeight] }))
+
+      // 7c) mixed batch: generic header + one 来源 line per item
+      badge().click()
+      await wait(40)
+      window.__draft = ''
+      document.querySelector('.dsba-panel .dsba-btn-primary').click()
+      await wait(80)
+      var mixed = window.__draft
+      assert('mixed draft header drops the single-document label', mixed.indexOf('【批注 · 请逐条回应】\n') === 0, JSON.stringify(mixed.slice(0, 60)))
+      assert('mixed draft tags the reply source', mixed.indexOf('1. 来源：DSH 回复 · 第 2 轮') >= 0, JSON.stringify(mixed))
+      assert('mixed draft tags the document source', mixed.indexOf('2. 来源：draft.md') >= 0, JSON.stringify(mixed))
+      assert('mixed draft keeps both quotes', mixed.indexOf('原文：「研究方向值得继续') >= 0 && mixed.indexOf('原文：「证据不足') >= 0, JSON.stringify(mixed))
+
+      // 8) composer text is not annotatable
+      assert('select composer text', selectText(document.getElementById('composer'), '输入框里的文字'))
+      await wait(80)
+      assert('no toolbar for composer selection', toolbarButton() === null)
+
+      // 8b) selection hugging the viewport bottom: no room below, so the pill
+      // flips above and must stack ABOVE the host pill instead of covering it.
+      hideHostPill()
+      assert('select text at the viewport bottom', selectText(document.getElementById('bottomDoc'), '底部'))
+      await wait(380)
+      var edgeBar = document.querySelector('.dsba-toolbar')
+      var edgePill = document.querySelector('.fakeHostSelectionPopup')
+      assert('bottom-edge selection still shows the pill', edgeBar !== null && edgePill !== null)
+      var edgeBox = edgeBar.getBoundingClientRect()
+      var edgePillBox = edgePill.getBoundingClientRect()
+      assert('bottom-edge pill stacks above the host pill without overlap',
+        !overlapping(edgeBox, edgePillBox) && edgeBox.bottom <= edgePillBox.top + 1,
+        JSON.stringify({ ours: [edgeBox.top, edgeBox.bottom], host: [edgePillBox.top, edgePillBox.bottom] }))
+      hideHostPill()
+
+      out.push('----- DRAFT -----\n' + draft + '\n----- /DRAFT -----')
+
+      // 9) selection cleared by the host hides a visible pill
+      assert('select for the selectionchange check', selectText(document.getElementById('p2'), '样本量偏小'))
+      await wait(120)
+      assert('pill visible before clearing', toolbarButton() !== null)
+      window.getSelection().removeAllRanges()
+      await wait(240)
+      assert('pill hides when the selection disappears', toolbarButton() === null)
+
+      // 10) hot-reload safety: applying again takes over the old instance
+      var secondDispose = plugin.apply(window.__ctx)
+      await wait(80)
+      assert('re-apply leaves at most one toolbar', document.querySelectorAll('.dsba-toolbar').length <= 1)
+      assert('re-apply leaves at most one badge', document.querySelectorAll('.dsba-badge').length <= 1)
+      dispose = secondDispose
+
+      // 11) dispose removes injected UI/styles
+      dispose()
+      await wait(30)
+      assert('style removed on dispose', document.getElementById('dsba-style') === null)
+      assert('dispose removes the toolbar and badge',
+        document.querySelector('.dsba-toolbar') === null && document.querySelector('.dsba-badge') === null &&
+        document.querySelector('.dsba-panel') === null)
+    } catch (err) {
+      out.push('FAIL harness threw :: ' + (err && err.stack ? err.stack : String(err)))
+      render()
+    }
+  })()
+</script>
+</body>
+</html>
