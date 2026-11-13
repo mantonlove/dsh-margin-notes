@@ -1,4 +1,4 @@
-# dsh-margin-notes
+# dsh-margin-notes · DSH 页边批注插件
 
 **DSH 页边批注插件**：在文档预览或助手回复里划词，写一句批注；攒成一批后，一次性写进输入框。
 
