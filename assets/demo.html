@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>dsh-margin-notes — demo</title>
+<style>
+  :root {
+    --bg: #0e1014;
+    --bg-soft: #13161b;
+    --bg-raised: #191d24;
+    --line: #262b34;
+    --line-soft: #1e232b;
+    --text: #e9e7e3;
+    --muted: #9aa3ae;
+    --dim: #6d7681;
+    --accent: #4d6bfe;
+    --accent-soft: rgba(77, 107, 254, .16);
+    --dsw-alias-bg-base: #191d24;
+    --dsw-alias-bg-elevated: #232833;
+    --dsw-alias-bg-hover: rgba(255, 255, 255, .07);
+    --dsw-alias-border-default: rgba(255, 255, 255, .14);
+    --dsw-alias-border-subtle: rgba(255, 255, 255, .06);
+    --dsw-alias-text-primary: #e9e7e3;
+    --dsw-alias-accent-fill: #4d6bfe;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.65 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow: hidden;
+  }
+  ::selection { background: rgba(77, 107, 254, .32); }
+
+  .app { display: grid; grid-template-columns: 216px minmax(0, 1fr) 562px; height: 100vh; }
+
+  /* left rail */
+  .rail { border-right: 1px solid var(--line-soft); background: #0b0d11; padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 16px; font-size: 13px; font-weight: 600; letter-spacing: .2px; }
+  .brand .mark { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(145deg, #5b7bff, #3b4fd8); display: grid; place-items: center; font-size: 11px; color: #fff; }
+  .rail .label { padding: 6px 8px; font-size: 11px; color: var(--dim); letter-spacing: .6px; text-transform: uppercase; }
+  .sess { padding: 7px 9px; border-radius: 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess.active { background: var(--bg-raised); color: var(--text); }
+  .rail .foot { margin-top: auto; padding: 8px; font-size: 11px; color: var(--dim); }
+
+  /* chat */
+  .chat { display: flex; flex-direction: column; min-width: 0; }
+  .chat-head { height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid var(--line-soft); font-size: 13px; color: var(--muted); }
+  .chat-head .dot { width: 6px; height: 6px; border-radius: 50%; background: #5ac48b; }
+  .thread { flex: 1 1 auto; overflow: hidden; padding: 26px 28px 8px; display: flex; flex-direction: column; gap: 22px; }
+  .msg { max-width: 560px; font-size: 14px; line-height: 1.78; }
+  .msg.user { align-self: flex-end; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 12px 12px 4px 12px; padding: 9px 14px; color: #d9dde4; }
+  .msg.assistant { align-self: flex-start; color: #dcd9d4; }
+  .msg .who { font-size: 11.5px; color: var(--dim); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .msg .who .a { width: 16px; height: 16px; border-radius: 50%; background: #2b3550; display: inline-grid; place-items: center; font-size: 9px; color: #aebfff; }
+  .msg p { margin: 0 0 8px; }
+  .msg p:last-child { margin-bottom: 0; }
+  .msg ul { margin: 6px 0 0; padding-left: 18px; color: #cfd3da; }
+
+  .composer-wrap { padding: 10px 20px 18px; }
+  .composer { border: 1px solid var(--line); background: var(--bg-soft); border-radius: 12px; padding: 11px 13px 8px; }
+  .composer .input { min-height: 40px; font-size: 13.5px; color: var(--dim); outline: none; }
+  .composer .bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .composer .hint { font-size: 11px; color: var(--dim); }
+  .composer .send { margin-left: auto; width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; color: #fff; font-size: 13px; }
+
+  /* document pane */
+  .docpane { border-left: 1px solid var(--line); background: var(--bg-soft); display: flex; flex-direction: column; min-height: 0; }
+  .doc-head { height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 8px; padding: 0 18px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--muted); }
+  .doc-head .file { color: var(--text); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .doc-head .tab { margin-left: auto; font-size: 11px; color: var(--dim); }
+  .doc-body { overflow: auto; padding: 30px 38px 60px; }
+  .doc-body h1 { font-size: 21px; line-height: 1.4; margin: 0 0 6px; letter-spacing: .2px; }
+  .doc-body .meta { font-size: 11.5px; color: var(--dim); margin-bottom: 24px; }
+  .doc-body h2 { font-size: 14.5px; margin: 26px 0 8px; color: #cfd3da; }
+  .doc-body p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.85; color: #cfccc6; }
+  .doc-body .callout { margin: 16px 0 18px; padding: 10px 12px; border-left: 2px solid #3b4a74; background: rgba(59, 74, 116, .12); font-size: 12.5px; color: #b9c1cd; }
+  .doc-body code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: #aebfff; }
+
+  /* fake host pill (better-sidebar "Add to conversation") */
+  .host-pill { position: fixed; z-index: 60; transform: translate(-50%, calc(-100% - 8px)); height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .16); background: #262b34; color: #dfe3e9; font-size: 11.5px; white-space: nowrap; cursor: pointer; }
+  .host-pill .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #7aa7ff; margin-right: 6px; vertical-align: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><span class="mark">◧</span> DeepSeek Harness</div>
+    <div class="label">今天</div>
+    <div class="sess active">三季度费率改革报告</div>
+    <div class="sess">货币政策执行报告梳理</div>
+    <div class="sess">固收+组合回撤复盘</div>
+    <div class="label">昨天</div>
+    <div class="sess">ETF 资金流周报</div>
+    <div class="sess">可转债条款对照</div>
+    <div class="foot">本地会话 · 批注只保存在本机</div>
+  </aside>
+
+  <main class="chat">
+    <div class="chat-head"><span class="dot"></span> 三季度费率改革报告 · 已保存</div>
+    <div class="thread">
+      <div class="msg user"><div class="who">你</div>帮我看下这份报告，重点看第 3 节「费率传导」的判断能不能站住。</div>
+      <div class="msg assistant" data-chat-flow-kind="assistant-step" data-chat-turn="2">
+        <div class="who"><span class="a">AI</span> 助手 · 第 2 轮</div>
+        <p>读完了。第 3 节的核心判断是「管理费下调会同步压低尾随佣金」，但报告只用 2024 年的平均费率做了一个跨期推断。</p>
+        <p>如果 2025 年渠道结构没变，这个推断勉强成立；一旦中小渠道的保有量占比上升，尾随佣金反而可能抬升。建议补一张按渠道类型分组的季度面板。</p>
+      </div>
+    </div>
+    <div class="composer-wrap">
+      <div class="composer" data-composer-card>
+        <div class="input" data-composer-input contenteditable="true"></div>
+        <div class="bar"><span class="hint">Enter 发送 · Shift+Enter 换行</span><span class="send">↑</span></div>
+      </div>
+    </div>
+  </main>
+
+  <section class="docpane" data-dsh-panel-host data-resource-url="dsh-resource://file/session/demo/docs/q3-review.md">
+    <div class="doc-head"><span class="file">q3-review.md</span><span class="tab">预览</span></div>
+    <div class="doc-body">
+      <h1>三季度公募基金费率改革观察</h1>
+      <div class="meta">内部研究 · 2025-10 · 第 3 稿</div>
+      <p>费率改革进入第三年，头部机构的管理费已连续八个季度下行。市场普遍预期，管理费的下调会沿着销售链条传导，最终压低渠道端的尾随佣金。</p>
+      <h2>3. 费率下调的传导</h2>
+      <p id="target">头部机构的管理费下调并未同步传导到销售服务费，尾随佣金仍是中小渠道的主要收入来源。报告据此认为，费率改革对渠道格局的影响被高估了。</p>
+      <p>这一判断与 2024 年的季度数据并不完全一致。2024 年下半年，头部渠道的尾随佣金率下降了 4.2 个基点，但中小渠道仅下降 0.8 个基点；同期中小渠道的权益保有量占比从 18.6% 上升到 21.4%。</p>
+      <div class="callout">口径提示：尾随佣金率 = 尾随佣金 / 日均保有量，分母使用基金公司口径，未剔除货币基金。</div>
+      <p>因此，更稳妥的表述是：管理费下调对头部渠道的传导较快，对中小渠道的传导存在滞后，且被保有量结构变化部分抵消。用全市场平均费率做跨期推断，会同时高估传导速度、低估结构效应。</p>
+      <h2>4. 下一步</h2>
+      <p>建议补充 2023Q1–2025Q2 的渠道级面板，按 <code>channel_type</code> 分组，控制保有量结构后再估计费率弹性。</p>
+    </div>
+  </section>
+</div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Seed a queue so the badge already has something to show.
+  // ---------------------------------------------------------------------------
+  try {
+    localStorage.clear()
+    localStorage.setItem('dsh-margin-notes:v1:demo-session', JSON.stringify([
+      {
+        id: 'seed-1',
+        quote: '市场普遍预期，管理费的下调会沿着销售链条传导，最终压低渠道端的尾随佣金。',
+        note: '这句是全文的前提，但没有给引用。',
+        doc: 'q3-review.md',
+        kind: 'doc',
+        at: Date.now() - 600000
+      },
+      {
+        id: 'seed-2',
+        quote: '建议补一张按渠道类型分组的季度面板。',
+        note: '同意，可以让它把变量清单也列出来。',
+        doc: 'DSH 回复 · 第 2 轮',
+        kind: 'chat',
+        at: Date.now() - 300000
+      }
+    ]))
+  } catch (err) {}
+
+  // ---------------------------------------------------------------------------
+  // Fake host services (same contract as the real App).
+  // ---------------------------------------------------------------------------
+  window.__draft = ''
+  var shell = {
+    state: { getSnapshot: function () { return { draft: window.__draft, draftRev: 1, attachmentIds: [] } } },
+    setDraft: function (text) { window.__draft = text },
+    submit: function () {}
+  }
+  window.__ctx = {
+    uiSession: { adapter: { current: { getSnapshot: function () { return { key: 'demo-session' } }, subscribe: function () { return function () {} } } } },
+    sessions: { scope: function (id) { return { id: id } }, list: { getSnapshot: function () { return { current: 'demo-session', items: [] } } } },
+    conversation: { input: { for: function () { return shell } } },
+    locale: { getSnapshot: function () { return { active: 'zh' } }, subscribe: function () { return function () {} } }
+  }
+  window.__ModuleLoader__ = { load: function (spec) { window.__spec = spec } }
+
+  function showHostPill(rect) {
+    var old = document.querySelector('.host-pill')
+    if (old !== null) old.remove()
+    var btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'host-pill'
+    btn.innerHTML = '<span class="dot"></span>Add to conversation'
+    btn.style.left = rect.left + rect.width / 2 + 'px'
+    btn.style.top = rect.top + 'px'
+    btn.addEventListener('mousedown', function (e) { e.preventDefault() })
+    document.body.appendChild(btn)
+  }
+
+  function selectText(el, needle) {
+    var node = null
+    for (var i = 0; i < el.childNodes.length; i++) {
+      if (el.childNodes[i].nodeType === 3) { node = el.childNodes[i]; break }
+    }
+    if (node === null) return false
+    var idx = node.nodeValue.indexOf(needle)
+    if (idx < 0) return false
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    var range = document.createRange()
+    range.setStart(node, idx)
+    range.setEnd(node, idx + needle.length)
+    var sel = window.getSelection()
+    sel.removeAllRanges()
+    sel.addRange(range)
+    var rect = range.getBoundingClientRect()
+    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    setTimeout(function () { showHostPill(rect) }, 40)
+    return true
+  }
+
+  (async function () {
+    function diag(msg) {
+      if (location.search.indexOf('debug=1') < 0) return
+      var d = document.createElement('div')
+      d.id = 'diag'
+      d.textContent = msg
+      d.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9999;background:#000;color:#0f0;font:12px monospace;padding:4px'
+      document.body.appendChild(d)
+    }
+    window.addEventListener('error', function (e) { diag('ERR ' + e.message + ' @ ' + e.filename + ':' + e.lineno) })
+    var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms) }) }
+    // The bundle is loaded by the next <script> tag; a timer runs after parsing.
+    await wait(80)
+    diag('spec=' + (typeof window.__spec) + ' factory=' + (window.__spec && typeof window.__spec.factory))
+    var plugin = window.__spec.factory(function () { throw new Error('no requires') })
+    plugin.apply(window.__ctx)
+    await wait(260)
+
+    var target = document.getElementById('target')
+    selectText(target, '头部机构的管理费下调并未同步传导到销售服务费，尾随佣金仍是中小渠道的主要收入来源。')
+    await wait(180)
+
+    if (new URLSearchParams(location.search).get('view') === 'batch') {
+      var pill = document.querySelector('.dsba-toolbar-btn')
+      pill.click()
+      await wait(120)
+      var pop = document.querySelector('.dsba-popover')
+      pop.querySelector('textarea').value = '这里缺一个反例：2024 年下半年中小渠道的尾随佣金率其实降了 0.8bp。'
+      pop.querySelector('.dsba-btn-primary').click()
+      await wait(160)
+      document.querySelector('.dsba-badge').click()
+      await wait(220)
+    }
+    if (location.search.indexOf('debug=1') >= 0) {
+      var tb = document.querySelector('.dsba-toolbar')
+      if (tb === null) diag('toolbar missing')
+      else {
+        var r = tb.getBoundingClientRect()
+        var cs = getComputedStyle(tb)
+        var hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+        diag('toolbar ' + JSON.stringify({ x: r.x, y: r.y, w: r.width, h: r.height, z: cs.zIndex, opacity: cs.opacity, visibility: cs.visibility, display: cs.display, bg: cs.backgroundColor, parent: tb.parentElement && tb.parentElement.tagName, attached: document.body.contains(tb), rects: tb.getClientRects().length, style: tb.getAttribute('style'), popover: tb.getAttribute('popover'), hit: hit && (hit.className || hit.tagName) }))
+      }
+      var sel = window.getSelection()
+      diag('sel=' + (sel === null ? 'null' : sel.toString().slice(0, 20)))
+    }
+  })()
+</script>
+<script src="../lib/client.js"></script>
+</body>
+</html>

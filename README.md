@@ -1,39 +1,131 @@
 # dsh-margin-notes
 
-> Margin notes for DSH：在文档或助手回复里划词加一句批注，攒成一批一次性塞进输入框发送。
+**DSH 页边批注插件**：在文档预览或助手回复里划词，写一句批注；攒成一批后，一次性写进输入框。
 
-在 DSH 右侧栏 / 全屏预览里读文档、或在对话里读助手回复时，选中文字 → 加一条批注；攒够后一次性把整批批注塞进输入框再发送。
+面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 Web GUI / 桌面 App。客户端插件，无运行时依赖，不联网，不接管文档渲染。
 
-## 它解决什么
+MIT · DSH 0.2.x · 35 项单测 + 64 项浏览器回归
 
-- 右侧栏或全屏看完一段文档，想改的地方很多，但输入框只能一条一条说。
-- 现在：`选中文字 → ＋批注 → 写一句 → 继续读`，全部批注以浮动徽标计数。
-- 对话里读回复时想吐槽的那一句也能直接圈住：助手回复、文档批注进同一个队列，发送时逐条标明来源。
-- 写错了不用删了重来：清单里每条都能二次编辑（`✎` 或双击），改完再一起发。
-- 读完后点徽标 → 「发送到输入框」，整批以结构化块进入草稿，可再补一句提问，回车发出。
+![界面截图：在文档里划词，选区下方浮出「＋ 批注」](https://raw.githubusercontent.com/mantonlove/dsh-margin-notes/main/assets/screenshot-selection.png)
 
-## 交互
+## 一句话说清
 
-| 动作 | 结果 |
+读长文档或长回复时，人往往一次想改很多处：这里要补引用、那句结论太强、这个数字口径不对。DSH 自带的「引用」一次只能带一条原文，逐条发送既慢又容易漏。
+
+dsh-margin-notes 把「划词 → 写批注 → 继续读」变成连续动作：批注先进入右下角的本地队列，读完再点「发送到输入框」，整批批注按条编号、带原文和批注文字，拼成一个结构化块写入当前会话草稿；你补一句总提问，回车发出，模型就能按 `Annotation 1 / 2 / 3` 逐条回应。
+
+批注只存在本机 `localStorage`，按会话隔离；不点发送，不会进入对话。
+
+## 适合谁，不适合谁
+
+| 适合 | 不适合 |
 | --- | --- |
-| 在文档里选中文字 | 选区**下方**浮现 `＋ 批注`（宿主的 `Add to conversation` 在上方，两者自动避让） |
-| 在对话里选中助手回复 | 同样浮现 `＋ 批注`；条目来源记为 `DSH 回复 · 第 N 轮`（用户自己的消息、工具条、输入框不触发） |
-| 点 `＋ 批注` | 弹出批注卡：原文预览 + 一句话批注（可留空） |
-| `⌘/Ctrl + Enter` 或「保存」 | 加入清单，右下角徽标显示条数 |
-| 点徽标 | 打开批注清单：逐条查看 / `✎` 编辑 / `↗` 定位 / `✕` 删除 / 清空 |
-| 点 `✎` 或双击条目 | 就地改这条批注（原文保留，只改批注文字）；`⌘Enter` 保存，`Esc` 取消 |
-| 「发送到输入框」 | 整批拼成块写入当前会话草稿，并把焦点交回输入框 |
-| `Esc` | 关闭浮层；点空白处同样关闭 |
+| 逐段审阅报告、论文、合同，想一次提多条修改意见 | 想要正文内联高亮、评论线程、多人协作 |
+| 读助手的长回复，想集中指出几处问题再追问 | 需要云端同步、跨设备共享批注 |
+| 边读边记「待核实 / 待补数据」，不想打断阅读节奏 | 扫描版 PDF、canvas 渲染的预览（没有可选中文本） |
+| 希望批注进入对话时仍保留原文上下文 | 想让它自动替你把批注发出去（它只写草稿） |
 
-批注块形状（中文；界面为英文时自动切英文）：
+## 它和「选中后引用」有什么不同
+
+| | DSH 自带「引用」 | dsh-margin-notes |
+| --- | --- | --- |
+| 一次带一条原文 | 是 | 是 |
+| 给每条写批注文字 | 引用后自己补，逐条操作 | 每条独立批注，可留空只标位置 |
+| 跨文档 / 助手回复汇总 | 否 | 是，同一队列，逐条标来源 |
+| 一次写入输入框 | 否 | 是，结构化块 + 编号 |
+| 发送前统一编辑 | 否 | 清单里逐条改、定位、删除 |
+| 数据位置 | 会话 | 本机 `localStorage`，按会话隔离 |
+
+两者可以共存：选中文字时，宿主自己的按钮在上方，本插件的「＋ 批注」在下方，互不遮挡。
+
+## 功能
+
+- **文档与回复都能批注**：右侧栏预览、全屏预览、宿主原生预览里的文档面板；对话里的助手回复（`assistant-step` / `turn-process`）。用户消息、工具卡片、输入框不触发。
+- **批量队列**：右下角徽标显示条数；点开是批注清单，可逐条 `✎` 编辑、`↗` 定位回原文、`✕` 删除，或整体清空。
+- **一次写入草稿**：整批拼成带编号的结构化块，写进当前会话输入框，不自动发送；草稿里原有文字会保留在块后，用 `【我的提问】` 分隔。
+- **按会话持久化**：key 为 `dsh-margin-notes:v1:<sessionId>`，切会话各自独立；旧版 `dsh-batch-annotations:v1:` 的数据首次加载时自动迁移。
+- **中英双语**：跟随 DSH 界面语言，运行中切换也即时更新徽标、清单与按钮文案。
+- **不抢选区、不挡按钮**：发送后聚焦输入框有防抢选区守卫；浮层默认在选区下方，贴视口底边时翻到上方，并避开宿主的 `Add to conversation` 胶囊。
+- **可访问性**：浮层、清单、徽标带 `role` / `aria-label`，提示用 `role="status"` 播报；键盘支持 `⌘/Ctrl + Enter` 保存、`Esc` 关闭。
+- **HMR 幂等**：重复 `apply()` 会先清理旧实例与残留节点，只保留一套 UI。
+
+## 界面
+
+划词后，选区下方出现「＋ 批注」；上方是 better-sidebar 自带的 `Add to conversation`，两者自动避让：
+
+![界面截图：文档划词后浮出批注按钮，与宿主引用按钮上下避让](https://raw.githubusercontent.com/mantonlove/dsh-margin-notes/main/assets/screenshot-selection.png)
+
+批注清单把文档与助手回复的批注放在同一个队列，发送前可逐条编辑：
+
+![界面截图：批注清单，文档与助手回复的批注汇总成一批](https://raw.githubusercontent.com/mantonlove/dsh-margin-notes/main/assets/screenshot-batch.png)
+
+> 截图为本地渲染的界面示意，使用与插件相同的 `lib/client.js` 和假宿主服务，不是真实会话内容。
+
+## 安装
+
+前置：DSH 0.2.x（Web GUI 或桌面 App）。插件是纯客户端 bundle，安装后通常无需重启。
+
+### 方式一：发布包（推荐）
+
+DSH 侧栏「插件」→ 添加插件，填入：
+
+```
+https://github.com/mantonlove/dsh-margin-notes/releases/latest/download/dsh-margin-notes.tgz
+```
+
+安装器会执行 `inspect → pnpm add → 写入 dsh.profile.bundles`，HMR 生效。
+
+### 方式二：本地软链（开发）
+
+```
+link:/absolute/path/to/dsh-margin-notes
+```
+
+改 `lib/client.js` 即时生效。安装细节与验证步骤见 [`docs/install-and-verify.md`](docs/install-and-verify.md)。
+
+### 方式三：Git 源
+
+```
+github:mantonlove/dsh-margin-notes
+```
+
+需要你的 DSH 版本支持 git 安装源；不支持时用方式一。
+
+### 确认是否装上
+
+打开 profile 的 `package.json`，确认：
+
+- `dependencies` 里有 `dsh-margin-notes`；
+- `dsh.profile.bundles` 数组里有 `"dsh-margin-notes"`。
+
+然后在文档里选中一段文字，看选区下方是否出现「＋ 批注」。
+
+## 使用
+
+1. 在文档面板或助手回复里**选中文字**，松开鼠标。
+2. 点选区下方的 **「＋ 批注」**。
+3. 写一句批注（可留空，只标位置），`⌘/Ctrl + Enter` 或「保存」。
+4. 继续读、继续选；右下角徽标累计条数。
+5. 点徽标打开清单，逐条检查、编辑、定位或删除。
+6. 点 **「发送到输入框」**，整批进入当前会话草稿；补一句总提问，回车发送。
+
+小技巧：
+
+- 清单里双击条目或点 `✎` 可以改批注文字，原文不变；`⌘Enter` 保存，`Esc` 取消。
+- `↗` 会回到原文位置并重新选中；它只在当前 DOM 里找，原文已消失时（例如切走了文档）不会跳转。
+- 草稿里已经有批注块时不会重复追加；草稿是斜杠命令时也不会拼入，避免破坏命令。
+
+## 批注块长什么样
+
+单来源（一个文档，或一轮回复）：
 
 ```
 【批注 · 请逐条回应】文档：report.md
 
-1. 原文：「selected text …」
-   批注：this claim needs a citation
+1. 原文：「头部机构的管理费下调并未同步传导到销售服务费」
+   批注：这里需要补一个 2024 年下半年的分组数据
 
-2. 原文：「…」
+2. 原文：「样本量偏小」
    批注：（无文字，仅标记此段）
 
 请按「Annotation 1：…」逐条回应，不要遗漏。
@@ -41,95 +133,138 @@
 【批注结束】
 ```
 
-同一个批次里既有文档又有回复（或多个文档）时，表头不再写单一文档，而是每条前面加一行来源：
+混合来源（文档 + 助手回复，或多个文档）时，表头不再写单一文档，每条前面标来源：
 
 ```
 【批注 · 请逐条回应】
 
 1. 来源：DSH 回复 · 第 2 轮
-   原文：「…」
-   批注：…
+   原文：「这个推断勉强成立」
+   批注：判断偏强，缺季度面板
 
-2. 来源：draft.md
-   原文：「…」
-   批注：…
+2. 来源：q3-review.md
+   原文：「尾随佣金仍是中小渠道的主要收入来源」
+   批注：补一条反例
+
+请按「Annotation 1：…」逐条回应，不要遗漏。
+
+【批注结束】
 ```
 
-草稿里原本有文字时，块前置、原文追加在后，并在块尾加 `【我的提问】` 分隔；
-草稿里已经有批注块时不重复追加。
+草稿里原本有文字时，块在前、原文在后，中间用 `【我的提问】` 分隔。界面语言为英文时，标记和提示会切成英文（`[Annotations — respond one by one]`）。
 
-## 浮层避让
+## 常见问题（FAQ）
 
-better-sidebar 自己在选区**上方** 8px 处挂一个 `Add to conversation` 按钮（`<hash>_selectionPopup`，`position: fixed`，`translate(-50%, calc(-100% - 8px))`）。我们早期也按同样的锚点放胶囊，结果两个按钮叠在一起（截图里 `Add … tion` 从两边露出来）。
+### 为什么我选中文字，没有出现「＋ 批注」？
 
-现在的定位规则（`planToolbarPlacement()`，纯函数、可单测）：
+先确认三件事：
 
-- 默认放在选区**下方** 8px，和宿主的胶囊天然分开；
-- 选区贴着视口底边、下方放不下时，翻到上方并**叠在宿主胶囊之上**，而不是盖住它；
-- 定位前扫一遍 `[class*="selectionPopup"]` 与选区附近的 `position: fixed` 浮层，落点相交就继续往外让；
-- 宿主胶囊是异步挂载的，展示后 90ms / 280ms 各重算一次，并用 900ms 的 `MutationObserver` 兜住更晚的挂载；
-- 文档面板自身若是 `position: fixed`，会被「是否包住选区」过滤掉，不会误判成浮层。
+1. 选区在**文档预览面板**或**助手回复**里。用户消息、工具调用卡片、输入框里的选区按设计不触发，避免和 DSH 自带的「引用」重复。
+2. 是**鼠标拖选**后松开，而不是只在输入框里移动光标。
+3. 插件确实在 `dsh.profile.bundles` 里，且页面已重载。
 
-## 幽灵胶囊
+仍不出现时，打开开发者工具看 `window.__dshBatchAnnotationsHost__` 是否存在；不存在说明 bundle 没加载。
 
-- 保存或取消一条批注后，选区还留在文档里时**不再重复弹出**胶囊：`suppressed` 闸门只在文档区域重新按下鼠标（`mousedown`）时解除。
-- 宿主异步恢复选区（`selectionchange`）会立刻收掉已显示的胶囊；选区被折叠、或移出文档区域时同样隐藏。
-- `apply()` 幂等：新实例先 `dispose()` 旧实例、再清掉所有残留 `.dsba-*` 节点，句柄存在 `window.__dshBatchAnnotationsHost__`，HMR 反复替换也只保留一套 UI。
-- 视口滚动 / 窗口缩放时收起胶囊（宿主也这么做），避免按钮停在错位的文字上。
+### 批注会自己发出去吗？
 
-## 兼容性
+不会。插件只调用 `setDraft` 把块写进草稿，是否发送、何时发送由你决定。草稿里已有批注块时也不会重复追加。
 
-- **不接管文档渲染**：只监听选区，靠 DOM 锚点识别「这是文档区域」，因此不依赖 dsh-better-sidebar 的内部实现，侧栏、全屏、宿主原生预览都能用。
-- **对话来源**：靠 `[data-chat-flow-kind="assistant-step"]` / `[data-chat-flow-kind="turn-process"]` 识别助手回复行（DSH 0.2.1-rc.3 实测属性），轮到第几轮取自 `data-chat-turn`；不劫持消息渲染。
-- **不写宿主状态**：批注清单存在 `localStorage`，key 为 `dsh-margin-notes:v1:<sessionId>`。
-- **降级**：找不到会话 / 服务缺失时只弹提示，不抛错到界面。
+### 批注存在哪里？会不会上传？
 
-## 安装
+存在当前浏览器的 `localStorage`，key 是 `dsh-margin-notes:v1:<sessionId>`，按会话隔离。插件没有任何网络请求，也不做遥测；清除站点数据会删掉批注，卸载插件不会自动删除。
 
-DSH App → 侧栏「插件」→ 添加插件，三选一：
+### 支持 PDF 吗？
 
-```
-https://github.com/mantonlove/dsh-margin-notes/releases/latest/download/dsh-margin-notes.tgz
-link:/absolute/path/to/dsh-margin-notes        # 本地开发：软链源码，改代码即时生效
-github:mantonlove/dsh-margin-notes             # 直接从仓库装（需你的 DSH 版本支持 git 源）
-```
+取决于预览器是否把文字渲染成可选中的 DOM 文本。文本层 PDF 可以；canvas 渲染的 PDF、以及塞进 iframe 的 HTML 预览不行——跨文档拿不到选区。
 
-安装走官方 `installBundle`（inspect → pnpm add → 写 `dsh.profile.bundles`），HMR 生效，通常无需重启。从本地检出开发时见 `docs/install-and-verify.md`。
+### 和 better-sidebar 的 `Add to conversation` 冲突吗？
 
-发布包：在仓库根执行 `npm pack`，把生成的 `dsh-margin-notes-<version>.tgz` 挂到 GitHub Release 的 `latest` 上即可（`files` 只含 `lib/`、`cordis.patch.yml`、`README.md`，无需构建）。
+不冲突。宿主按钮在选区上方，本插件默认在下方；贴视口底边时翻到上方并叠在宿主按钮之上，而不是盖住它。定位前还会扫一遍 `selectionPopup` 和选区附近的 `position: fixed` 浮层做避让。
 
-## 开发
+### 为什么按钮有时候出现在选区上方？
 
-```
-node --test test/contract.test.mjs      # 12 项：App 侧加载合约（manifest / 注册 / 服务名 / 补丁）
-node --test test/format.test.mjs        # 13 项：纯函数（选区过滤、块拼装、存储、locale）
-node --test test/placement.test.mjs     # 10 项：浮层落点与徽标夹取（默认在下、底边翻上、避让宿主胶囊、横向夹取）
-python3 -m http.server 8732             # 在包根目录起服务
-open http://127.0.0.1:8732/test/harness.html   # 64 项：真实浏览器里跑完整交互（含胶囊避让、清单二次编辑、幽灵胶囊回归、语言切换、热替换幂等）
-```
+选区贴着视口底边、下方放不下时，浮层会翻到上方；如果上方有宿主胶囊，会继续往上让。滚动或缩放窗口时浮层会收起，避免停在错位的文字上。
 
-- `test/contract.test.mjs` 把 App 0.2.1-rc.3 自己的加载规则钉成断言：`dsh.client.platform === 'web'`、`exports["./client"]` 必须存在、注册 id 必须等于包名、`cordis.patch.yml` 的 insert 行、四个 Cordis 服务名。规则出处见 `docs/install-and-verify.md` 的「加载合约」表。
+### 升级或重装会丢批注吗？
 
-- 单元测试在 VM 沙箱里直接加载 **`lib/client.js`**（`window.__ModuleLoader__` 打桩），验证真实产物里的纯函数，不复制逻辑。
-- `test/harness.html` 用假 `ctx`（`sessions` / `conversation` / `locale` / `uiSession`）和假 DOM 跑全链路：选区 → 浮层 → 弹卡 → 徽标 → 清单（含二次编辑 / Esc 取消）→ 拼块 → 写草稿，并断言「对话消息 / 输入框里的选区不触发」以及 `dispose` 清理。标题会显示 `HARNESS PASS` / `HARNESS FAIL` 和逐项结果。
-- 这个 harness 已经抓到两个真实 bug：弹卡引用没赋值导致浮层叠罗汉、清单先渲染后置位导致面板空白。改交互后先跑它。
+不会。存储 key 带 `v1` 前缀且不随版本变化；旧版 `dsh-batch-annotations:v1:` 的数据会在首次加载时迁移。只有清除浏览器站点数据才会丢。
+
+### 能同时开两个窗口批注同一个会话吗？
+
+不建议。两个窗口各自持有内存队列，保存时以最后写入的为准，另一个窗口不会实时同步。需要并行时，先在一个窗口发送完再开另一个。
+
+### 支持哪些 DSH 版本？
+
+在 DSH 0.2.1-rc.3 与 0.2.2-rc.2 上实测；依赖 `sessions`、`conversation`、`locale`、`uiSession` 四个客户端服务，0.2.x 设计目标。更早的 0.1.x 未验证。
+
+### 会不会影响性能？
+
+事件监听都在 `document` 捕获阶段，选区变化有 80ms 防抖；浮层只创建一个节点，清单按需渲染。没有轮询，也没有 MutationObserver 常驻（仅浮层显示后 900ms 内兜住宿主异步挂载）。
+
+## 兼容性与实现方式
+
+- **只监听选区，不接管渲染**：靠 DOM 锚点识别文档面板与助手回复，不依赖 better-sidebar 的内部实现；侧栏、全屏、原生预览都能用。
+- **对话来源**：`[data-chat-flow-kind="assistant-step"]` / `[data-chat-flow-kind="turn-process"]`，轮次取自 `data-chat-turn`；不劫持消息渲染。
+- **不写宿主状态**：除输入框草稿外，不修改会话、消息或文档内容。
+- **定位兜底**：若浮层被祖先的 `transform` / `filter` / `contain` 困在错误的 containing block 里，会提升到 top layer（`popover="manual"`）并记录诊断到 `localStorage['dsba:diag']`。
+- **服务缺失降级**：找不到会话或输入框时只弹提示，不把异常抛到界面。
 
 ## 已知边界
 
-- PDF / 图片预览里的文字选区取决于预览器是否为 DOM 文本；canvas 渲染的 PDF、以及塞进 iframe 的 HTML 预览选不中（跨文档拿不到选区）。
-- 只处理文档与助手回复；用户消息、工具卡片与输入框里的选区不触发（避免和 DSH 自带的「引用」重复）。
-- 批注不做正文内联高亮（避免与编辑器重渲染冲突），定位用清单里的 `↗`。
+- 不做正文内联高亮，避免与编辑器重渲染冲突；回看用清单里的 `↗`。
+- 只处理文档与助手回复，不处理用户消息、工具卡片、输入框。
+- 无云端同步、无多人协作、无批注导入导出。
+- 划词本身需要鼠标；键盘支持限于浮层内的保存 / 取消。
+- 同一浏览器多标签页不实时同步（见 FAQ）。
+
+## 开发与测试
+
+```
+npm test                                 # 35 项：契约 12 + 纯函数 13 + 落点 10
+python3 -m http.server 8732              # 在包根目录起服务
+open http://127.0.0.1:8732/test/harness.html   # 64 项浏览器回归
+```
+
+- `test/contract.test.mjs` 把 App 的加载规则钉成断言：`dsh.client.platform === 'web'`、`exports["./client"]`、注册 id 等于包名、`cordis.patch.yml` 的 insert 行、四个 Cordis 服务名。
+- `test/format.test.mjs` / `test/placement.test.mjs` 在 VM 沙箱里直接加载 `lib/client.js`，验证真实产物里的纯函数（块拼装、选区过滤、存储、浮层落点、徽标夹取）。
+- `test/harness.html` 用假 `ctx` 和假 DOM 跑全链路：选区 → 浮层 → 弹卡 → 徽标 → 清单（编辑 / Esc）→ 拼块 → 写草稿，并覆盖语言切换、热替换幂等与 `dispose` 清理。
+- `assets/demo.html` 是 README 截图的渲染页：真实 `client.js` + 假宿主服务，可本地打开。
+
+设计说明见 [`docs/install-and-verify.md`](docs/install-and-verify.md)。改交互后先跑 harness；它已经抓到过「弹卡引用未赋值导致浮层叠罗汉」「清单先渲染后置位导致空白」「发送后延迟聚焦抢走新选区」三个真实 bug。
+
+## English
+
+**dsh-margin-notes** is a margin-annotation plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH). Select text in a document preview or an assistant reply, attach a short note, collect several notes in a local queue, then insert the whole batch into the composer as one structured, numbered block — the model answers each annotation in order.
+
+- Works on document panels and assistant replies; user messages, tool cards and the composer are ignored.
+- Batch queue per session, stored in `localStorage` and never uploaded; sending is always manual.
+- The whole list can be reviewed, edited, located and deleted before sending.
+- Chinese and English UI; follows the host locale at runtime.
+- Client-only bundle, no runtime dependencies, no network requests.
+
+Install from the DSH plugin panel with:
+
+```
+https://github.com/mantonlove/dsh-margin-notes/releases/latest/download/dsh-margin-notes.tgz
+```
+
+Requires DSH 0.2.x. See the Chinese sections above for usage, FAQ and known limits.
 
 ## 变更记录
+
+### 0.1.3
+
+- 文档与发布资产：新增插件图标（`assets/icon-180.png`）与两张界面截图，重写 README（安装、用法、FAQ、兼容性、英文说明），补充 package 关键词。
+- 无运行时代码改动；测试仍为 35 项单测 + 64 项浏览器回归。
 
 ### 0.1.2
 
 - 修复：发送后延迟聚焦输入框会抢走刚划的新选区，表现为批注胶囊不出现或点了没反应（harness 偶发失败的根因）。
 - 修复：窗口较矮时徽标会跟着文档面板下移、压到输入框；现在固定在窗口右下角并做边界夹取。
-- 改进：运行中切换界面语言，徽标与清单文案即时跟随（此前只在挂载时读一次 locale）。
+- 改进：运行中切换界面语言，徽标与清单文案即时跟随。
 - 改进：多个面板同时挂载时，焦点交给可见的那个输入框。
-- 改进：浮层、清单、徽标与提示补上 `role` / `aria-label`，读屏能播报批注条数与操作按钮。
-- 测试：单测 35 项、浏览器 harness 64 项；文档计数与当前 App / better-sidebar 版本同步。
+- 改进：浮层、清单、徽标与提示补上 `role` / `aria-label`。
+- 测试：单测 35 项、浏览器 harness 64 项。
 
 ### 0.1.1
 
