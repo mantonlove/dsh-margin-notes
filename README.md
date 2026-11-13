@@ -89,9 +89,9 @@ better-sidebar 自己在选区**上方** 8px 处挂一个 `Add to conversation` 
 DSH App → 侧栏「插件」→ 添加插件，三选一：
 
 ```
-github:mantonlove/dsh-margin-notes                                        # 直接从仓库装
-https://github.com/mantonlove/dsh-margin-notes/releases/latest/download/dsh-margin-notes.tgz   # 发布包
-link:/absolute/path/to/dsh-margin-notes                                   # 本地开发，改代码即时生效
+https://github.com/mantonlove/dsh-margin-notes/releases/latest/download/dsh-margin-notes.tgz
+link:/absolute/path/to/dsh-margin-notes        # 本地开发：软链源码，改代码即时生效
+github:mantonlove/dsh-margin-notes             # 直接从仓库装（需你的 DSH 版本支持 git 源）
 ```
 
 安装走官方 `installBundle`（inspect → pnpm add → 写 `dsh.profile.bundles`），HMR 生效，通常无需重启。从本地检出开发时见 `docs/install-and-verify.md`。
