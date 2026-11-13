@@ -195,7 +195,7 @@ github:mantonlove/dsh-margin-notes
 
 ### 支持哪些 DSH 版本？
 
-在 DSH 0.2.1-rc.3 与 0.2.2-rc.2 上实测；依赖 `sessions`、`conversation`、`locale`、`uiSession` 四个客户端服务，0.2.x 设计目标。更早的 0.1.x 未验证。
+在 DSH 0.2.2-rc.2 上实测；依赖 `sessions`、`conversation`、`locale`、`uiSession` 四个客户端服务，0.2.x 设计目标。更早的版本未验证。
 
 ### 会不会影响性能？
 
