@@ -254,6 +254,11 @@ Requires DSH 0.2.x. See the Chinese sections above for usage, FAQ and known limi
 
 ## 变更记录
 
+### 0.1.5
+
+- 修复：插入批注块前先聚焦当前输入框，避免空 composer 尚未初始化时 `insertReference` 返回 false。
+- 测试：单测 38 项、浏览器 harness 74 项。
+
 ### 0.1.4
 
 - 改进：发送到输入框的整批批注不再铺成一大段文字，而是收成输入框里的一个内联「批注块」chip；发送时由 codec 展开，平时只占一个 token 的位置。
