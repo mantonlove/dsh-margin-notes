@@ -49,10 +49,35 @@
   // ---- fake host services -------------------------------------------------
   window.__draft = ''
   window.__submitted = false
+  window.__occurrences = []
+  window.__inserted = []
+  window.__source = null
 
   var shell = {
-    state: { getSnapshot: function () { return { draft: window.__draft, draftRev: 1, attachmentIds: [] } } },
+    state: {
+      getSnapshot: function () {
+        return { draft: window.__draft, draftRev: 1, attachmentIds: [], occurrences: window.__occurrences, phase: 'plain' }
+      },
+    },
     setDraft: function (text) { window.__draft = text },
+    // Mirrors SessionInputShell.insertReference(): one chip replaces the
+    // detect span; its clipboard projection is the whole block.
+    insertReference: function (insert, span) {
+      if (span.draftRev !== 1) return false
+      window.__inserted.push({ insert: insert, span: span })
+      var offset = window.__draft.length
+      window.__draft += insert.clipboardText
+      window.__occurrences.push({
+        source: insert.source,
+        ref: insert.ref,
+        offset: offset,
+        length: insert.clipboardText.length,
+        label: insert.label,
+        clipboardText: insert.clipboardText,
+      })
+      window.__draft += ' '
+      return true
+    },
     requestDraftInitialization: function () { return 'applied' },
     actions: {
       captureInsertion: function () { return { start: window.__draft.length, end: window.__draft.length, draftRev: 1 } },
@@ -61,7 +86,15 @@
     submit: function () { window.__submitted = true },
   }
 
+  window.__inputTriggers = {
+    registerSource: function (src) {
+      window.__source = src
+      return function () { window.__source = null }
+    },
+  }
+
   window.__ctx = {
+    get: function (name) { return name === 'inputTriggers' ? window.__inputTriggers : undefined },
     uiSession: { adapter: { current: { getSnapshot: function () { return { key: 'sess-1' } }, subscribe: function () { return function () {} } } } },
     sessions: { scope: function (id) { return { id: id } }, list: { getSnapshot: function () { return { current: 'sess-1', items: [] } } } },
     conversation: { input: { for: function () { return shell } } },
@@ -325,6 +358,17 @@
       assert('draft ends with the closing mark', draft.trim().endsWith('【批注结束】'))
       assert('badge cleared after send', badge() === null)
       assert('queue cleared after send', JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]').length === 0)
+      assert('send inserts ONE inline chip instead of replacing the draft',
+        window.__inserted.length === 1 && window.__inserted[0].span.start === 0 && window.__inserted[0].span.end === 0,
+        JSON.stringify(window.__inserted.map(function (x) { return x.span })))
+      assert('chip registers an @-source so submit can expand it',
+        window.__source !== null && window.__source.trigger === '@' && window.__source.name === 'margin-notes',
+        window.__source ? window.__source.trigger + '/' + window.__source.name : 'no source')
+      var firstRef = window.__inserted[0].insert.ref
+      var firstExpanded = await window.__source.codec.serialize(firstRef)
+      assert('chip codec expands to the full block at submit time',
+        firstExpanded.indexOf('【批注 · 请逐条回应】') === 0 && firstExpanded.trim().endsWith('【批注结束】'),
+        JSON.stringify(firstExpanded.slice(0, 40)))
 
       // 7) assistant replies are annotatable too (same queue, mixed sources)
       assert('select assistant reply', selectText(document.getElementById('c1'), '研究方向值得继续'))
@@ -370,6 +414,8 @@
       badge().click()
       await wait(40)
       window.__draft = ''
+      window.__occurrences = []
+      window.__inserted = []
       document.querySelector('.dsba-panel .dsba-btn-primary').click()
       await wait(80)
       var mixed = window.__draft
@@ -377,6 +423,8 @@
       assert('mixed draft tags the reply source', mixed.indexOf('1. 来源：DSH 回复 · 第 2 轮') >= 0, JSON.stringify(mixed))
       assert('mixed draft tags the document source', mixed.indexOf('2. 来源：draft.md') >= 0, JSON.stringify(mixed))
       assert('mixed draft keeps both quotes', mixed.indexOf('原文：「研究方向值得继续') >= 0 && mixed.indexOf('原文：「证据不足') >= 0, JSON.stringify(mixed))
+      assert('mixed batch is still a single chip', window.__inserted.length === 1 && window.__occurrences.length === 1,
+        'inserted=' + window.__inserted.length + ' occurrences=' + window.__occurrences.length)
 
       // 8) composer text is not annotatable
       assert('select composer text', selectText(document.getElementById('composer'), '输入框里的文字'))
@@ -397,6 +445,54 @@
         !overlapping(edgeBox, edgePillBox) && edgeBox.bottom <= edgePillBox.top + 1,
         JSON.stringify({ ours: [edgeBox.top, edgeBox.bottom], host: [edgePillBox.top, edgePillBox.bottom] }))
       hideHostPill()
+
+      // 8c) a later batch folds into the chip already in the draft
+      assert('select text for the merge batch', selectText(document.getElementById('p1'), '需要补充对照组'))
+      await wait(80)
+      toolbarButton().click()
+      await wait(40)
+      popover().querySelector('textarea').value = '合并进已有批注块'
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(60)
+      if (document.querySelector('.dsba-panel') === null) {
+        badge().click()
+        await wait(40)
+      }
+      var insertsBeforeMerge = window.__inserted.length
+      document.querySelector('.dsba-panel .dsba-btn-primary').click()
+      await wait(80)
+      assert('later batch merges into the existing chip',
+        window.__inserted.length === insertsBeforeMerge && window.__occurrences.length === 1,
+        'inserted=' + window.__inserted.length + ' occurrences=' + window.__occurrences.length)
+      var mergedText = await window.__source.codec.serialize(window.__occurrences[0].ref)
+      assert('merged chip carries both old and new annotations',
+        mergedText.indexOf('证据不足') >= 0 && mergedText.indexOf('需要补充对照组') >= 0,
+        JSON.stringify(mergedText.slice(0, 60)))
+      var storedChip = JSON.parse(window.localStorage.getItem('dsh-margin-notes:chip:v1:' + window.__occurrences[0].ref) || 'null')
+      assert('chip payload is persisted so a restored draft still expands',
+        storedChip !== null && storedChip.block.indexOf('需要补充对照组') >= 0,
+        JSON.stringify(storedChip && storedChip.block.slice(0, 30)))
+
+      // 8d) a composer without insertReference falls back to pasted text
+      shell.insertReference = undefined
+      window.__draft = ''
+      window.__occurrences = []
+      assert('select text for the text fallback', selectText(document.getElementById('p1'), '需要补充对照组'))
+      await wait(80)
+      toolbarButton().click()
+      await wait(40)
+      popover().querySelector('textarea').value = '文本回退'
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(60)
+      if (document.querySelector('.dsba-panel') === null) {
+        badge().click()
+        await wait(40)
+      }
+      document.querySelector('.dsba-panel .dsba-btn-primary').click()
+      await wait(80)
+      assert('fallback pastes the block when chips are unavailable',
+        window.__draft.indexOf('【批注 · 请逐条回应】') === 0 && window.__draft.indexOf('文本回退') >= 0,
+        JSON.stringify(window.__draft.slice(0, 40)))
 
       out.push('----- DRAFT -----\n' + draft + '\n----- /DRAFT -----')
 

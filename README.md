@@ -1,10 +1,10 @@
 # dsh-margin-notes · DSH 页边批注插件
 
-**DSH 页边批注插件**：在文档预览或助手回复里划词，写一句批注；攒成一批后，一次性写进输入框。
+**DSH 页边批注插件**：在文档预览或助手回复里划词，写一句批注；攒成一批后，收进输入框里的一个内联批注块，发送时才展开成完整文本。
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 Web GUI / 桌面 App。客户端插件，无运行时依赖，不联网，不接管文档渲染。
 
-MIT · DSH 0.2.x · 35 项单测 + 64 项浏览器回归
+MIT · DSH 0.2.x · 38 项单测 + 74 项浏览器回归
 
 ![界面截图：在文档里划词，选区下方浮出「＋ 批注」](https://raw.githubusercontent.com/mantonlove/dsh-margin-notes/main/assets/screenshot-selection.png)
 
@@ -12,7 +12,7 @@ MIT · DSH 0.2.x · 35 项单测 + 64 项浏览器回归
 
 读长文档或长回复时，人往往一次想改很多处：这里要补引用、那句结论太强、这个数字口径不对。DSH 自带的「引用」一次只能带一条原文，逐条发送既慢又容易漏。
 
-dsh-margin-notes 把「划词 → 写批注 → 继续读」变成连续动作：批注先进入右下角的本地队列，读完再点「发送到输入框」，整批批注按条编号、带原文和批注文字，拼成一个结构化块写入当前会话草稿；你补一句总提问，回车发出，模型就能按 `Annotation 1 / 2 / 3` 逐条回应。
+dsh-margin-notes 把「划词 → 写批注 → 继续读」变成连续动作：批注先进入右下角的本地队列，读完再点「发送到输入框」，整批批注先收成输入框里的一个「批注块」chip，不占正文位置；你可以继续在同一个输入框里写别的指令，回车发送时 chip 才展开成带编号的结构化块，模型按 `Annotation 1 / 2 / 3` 逐条回应。
 
 批注只存在本机 `localStorage`，按会话隔离；不点发送，不会进入对话。
 
@@ -42,7 +42,8 @@ dsh-margin-notes 把「划词 → 写批注 → 继续读」变成连续动作�
 
 - **文档与回复都能批注**：右侧栏预览、全屏预览、宿主原生预览里的文档面板；对话里的助手回复（`assistant-step` / `turn-process`）。用户消息、工具卡片、输入框不触发。
 - **批量队列**：右下角徽标显示条数；点开是批注清单，可逐条 `✎` 编辑、`↗` 定位回原文、`✕` 删除，或整体清空。
-- **一次写入草稿**：整批拼成带编号的结构化块，写进当前会话输入框，不自动发送；草稿里原有文字会保留在块后，用 `【我的提问】` 分隔。
+- **输入框里的批注块**：整批收成一个内联 chip（显示「批注块」），不占正文位置；发送时由插件 codec 展开成带编号的结构化块。草稿里原有的文字保持原样，可以继续在同一个输入框里写指令。
+- **合并而不是堆叠**：草稿里已经有本插件的批注块时，新一批会合并进同一个 chip，不会出现两个块。
 - **按会话持久化**：key 为 `dsh-margin-notes:v1:<sessionId>`，切会话各自独立；旧版 `dsh-batch-annotations:v1:` 的数据首次加载时自动迁移。
 - **中英双语**：跟随 DSH 界面语言，运行中切换也即时更新徽标、清单与按钮文案。
 - **不抢选区、不挡按钮**：发送后聚焦输入框有防抢选区守卫；浮层默认在选区下方，贴视口底边时翻到上方，并避开宿主的 `Add to conversation` 胶囊。
@@ -107,13 +108,13 @@ github:mantonlove/dsh-margin-notes
 3. 写一句批注（可留空，只标位置），`⌘/Ctrl + Enter` 或「保存」。
 4. 继续读、继续选；右下角徽标累计条数。
 5. 点徽标打开清单，逐条检查、编辑、定位或删除。
-6. 点 **「发送到输入框」**，整批进入当前会话草稿；补一句总提问，回车发送。
+6. 点 **「发送到输入框」**，整批变成输入框里的一个「批注块」chip；可以继续写别的指令，回车时 chip 自动展开成完整文本。
 
 小技巧：
 
 - 清单里双击条目或点 `✎` 可以改批注文字，原文不变；`⌘Enter` 保存，`Esc` 取消。
 - `↗` 会回到原文位置并重新选中；它只在当前 DOM 里找，原文已消失时（例如切走了文档）不会跳转。
-- 草稿里已经有批注块时不会重复追加；草稿是斜杠命令时也不会拼入，避免破坏命令。
+- 草稿里已经有本插件的批注块时，新批注会合并进同一个 chip；草稿是斜杠命令时不会拼入，避免破坏命令。
 
 ## 批注块长什么样
 
@@ -167,7 +168,7 @@ github:mantonlove/dsh-margin-notes
 
 ### 批注会自己发出去吗？
 
-不会。插件只调用 `setDraft` 把块写进草稿，是否发送、何时发送由你决定。草稿里已有批注块时也不会重复追加。
+不会。插件把整批内容作为内联引用 chip 插入草稿（`insertReference`），只在发送时由 codec 展开成完整文本；是否发送、何时发送由你决定。草稿里已有批注块时会合并，不会重复追加。
 
 ### 批注存在哪里？会不会上传？
 
@@ -205,7 +206,7 @@ github:mantonlove/dsh-margin-notes
 
 - **只监听选区，不接管渲染**：靠 DOM 锚点识别文档面板与助手回复，不依赖 better-sidebar 的内部实现；侧栏、全屏、原生预览都能用。
 - **对话来源**：`[data-chat-flow-kind="assistant-step"]` / `[data-chat-flow-kind="turn-process"]`，轮次取自 `data-chat-turn`；不劫持消息渲染。
-- **不写宿主状态**：除输入框草稿外，不修改会话、消息或文档内容。
+- **不写宿主状态**：除输入框草稿与插件自己的本地存储外，不修改会话、消息或文档内容。
 - **定位兜底**：若浮层被祖先的 `transform` / `filter` / `contain` 困在错误的 containing block 里，会提升到 top layer（`popover="manual"`）并记录诊断到 `localStorage['dsba:diag']`。
 - **服务缺失降级**：找不到会话或输入框时只弹提示，不把异常抛到界面。
 
@@ -216,18 +217,19 @@ github:mantonlove/dsh-margin-notes
 - 无云端同步、无多人协作、无批注导入导出。
 - 划词本身需要鼠标；键盘支持限于浮层内的保存 / 取消。
 - 同一浏览器多标签页不实时同步（见 FAQ）。
+- 批注块是输入框里的内联 chip；刷新后若草稿仍在，展开文本从 `localStorage` 的 `dsh-margin-notes:chip:v1:<ref>` 恢复（只保留最近 24 个块）。清除站点数据后，旧 chip 无法展开，删掉重发即可。
 
 ## 开发与测试
 
 ```
-npm test                                 # 35 项：契约 12 + 纯函数 13 + 落点 10
+npm test                                 # 38 项：契约 12 + 格式 13 + 落点/chip 13
 python3 -m http.server 8732              # 在包根目录起服务
-open http://127.0.0.1:8732/test/harness.html   # 64 项浏览器回归
+open http://127.0.0.1:8732/test/harness.html   # 74 项浏览器回归
 ```
 
 - `test/contract.test.mjs` 把 App 的加载规则钉成断言：`dsh.client.platform === 'web'`、`exports["./client"]`、注册 id 等于包名、`cordis.patch.yml` 的 insert 行、四个 Cordis 服务名。
-- `test/format.test.mjs` / `test/placement.test.mjs` 在 VM 沙箱里直接加载 `lib/client.js`，验证真实产物里的纯函数（块拼装、选区过滤、存储、浮层落点、徽标夹取）。
-- `test/harness.html` 用假 `ctx` 和假 DOM 跑全链路：选区 → 浮层 → 弹卡 → 徽标 → 清单（编辑 / Esc）→ 拼块 → 写草稿，并覆盖语言切换、热替换幂等与 `dispose` 清理。
+- `test/format.test.mjs` / `test/placement.test.mjs` 在 VM 沙箱里直接加载 `lib/client.js`，验证真实产物里的纯函数（块拼装、选区过滤、存储、浮层落点、徽标夹取、chip 投影剪裁与 detect 坐标）。
+- `test/harness.html` 用假 `ctx` 和假 DOM 跑全链路：选区 → 浮层 → 弹卡 → 徽标 → 清单（编辑 / Esc）→ 拼块 → 写草稿，并覆盖输入框 chip（插入、合并、刷新后展开、无 `insertReference` 时回退文本）、语言切换、热替换幂等与 `dispose` 清理。
 - `assets/demo.html` 是 README 截图的渲染页：真实 `client.js` + 假宿主服务，可本地打开。
 
 设计说明见 [`docs/install-and-verify.md`](docs/install-and-verify.md)。改交互后先跑 harness；它已经抓到过「弹卡引用未赋值导致浮层叠罗汉」「清单先渲染后置位导致空白」「发送后延迟聚焦抢走新选区」三个真实 bug。
@@ -252,10 +254,17 @@ Requires DSH 0.2.x. See the Chinese sections above for usage, FAQ and known limi
 
 ## 变更记录
 
+### 0.1.4
+
+- 改进：发送到输入框的整批批注不再铺成一大段文字，而是收成输入框里的一个内联「批注块」chip；发送时由 codec 展开，平时只占一个 token 的位置。
+- 改进：同一草稿里再次发送会合并进现有 chip；chip 内容持久化到 `localStorage`，刷新后仍可展开。
+- 兼容：没有 `insertReference` 的旧 composer 自动回退为原来的文本块。
+- 测试：单测 38 项、浏览器 harness 74 项。
+
 ### 0.1.3
 
 - 文档与发布资产：新增插件图标（`assets/icon-180.png`）与两张界面截图，重写 README（安装、用法、FAQ、兼容性、英文说明），补充 package 关键词。
-- 无运行时代码改动；测试仍为 35 项单测 + 64 项浏览器回归。
+- 无运行时代码改动；当时的测试为 35 项单测 + 64 项浏览器回归。
 
 ### 0.1.2
 
@@ -264,7 +273,7 @@ Requires DSH 0.2.x. See the Chinese sections above for usage, FAQ and known limi
 - 改进：运行中切换界面语言，徽标与清单文案即时跟随。
 - 改进：多个面板同时挂载时，焦点交给可见的那个输入框。
 - 改进：浮层、清单、徽标与提示补上 `role` / `aria-label`。
-- 测试：单测 35 项、浏览器 harness 64 项。
+- 测试：当时的单测 35 项、浏览器 harness 64 项。
 
 ### 0.1.1
 

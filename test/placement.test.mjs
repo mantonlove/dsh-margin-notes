@@ -38,7 +38,7 @@ vm.runInContext(code, sandbox)
 const plugin = factory(() => {
   throw new Error('client bundle must not require host modules')
 })
-const { planToolbarPlacement, toolbarBox, badgeOffset } = plugin.__test
+const { planToolbarPlacement, toolbarBox, badgeOffset, stripChipRanges, detectLength, findChip } = plugin.__test
 
 const SIZE = { width: 96, height: 28 }
 const VIEWPORT = { width: 1280, height: 800 }
@@ -130,4 +130,24 @@ test('badge clamps its right offset on a narrow viewport', () => {
   const narrow = badgeOffset({ width: 100, height: 800 }, SIZE)
   assert.equal(narrow.right, 12)
   assert.equal(narrow.bottom, 96)
+})
+
+test('stripChipRanges cuts the chip projection but keeps typed text', () => {
+  const block = '【批注 · 请逐条回应】\n1. 原文：「甲」\n【批注结束】'
+  const draft = '前言\n' + block + '\n后记'
+  const occurrences = [{ source: 'margin-notes', ref: 'mn-1', offset: 3, length: block.length }]
+  assert.equal(stripChipRanges(draft, occurrences), '前言\n\n后记')
+})
+
+test('detectLength counts a chip as one placeholder character', () => {
+  const draft = 'ab' + 'x'.repeat(50) + 'c'
+  const occurrences = [{ source: 'margin-notes', ref: 'mn-1', offset: 2, length: 50 }]
+  assert.equal(detectLength(draft, occurrences), 4)
+  assert.equal(detectLength('abc', []), 3)
+})
+
+test('findChip ignores reference chips from other sources', () => {
+  assert.equal(findChip([{ source: 'file', ref: 'f-1' }]), null)
+  const chip = { source: 'margin-notes', ref: 'mn-1' }
+  assert.equal(findChip([{ source: 'file' }, chip]), chip)
 })
