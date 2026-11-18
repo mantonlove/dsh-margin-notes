@@ -1,6 +1,6 @@
 {
   "name": "dsh-margin-notes",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Margin notes for DSH: select text in a document or an assistant reply, jot a note in the margin, collect them, then drop the batch into the composer as one inline annotation chip that expands on send.",
   "type": "module",
   "main": "lib/index.js",

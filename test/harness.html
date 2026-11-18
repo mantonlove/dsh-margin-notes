@@ -19,6 +19,9 @@
   <h3>draft.md</h3>
   <p id="p1">第一段：这个结论的证据不足，需要补充对照组。</p>
   <p id="p2">第二段：样本量偏小，建议扩大样本。</p>
+  <p id="p3">前缀<em>强调</em>后缀</p>
+  <p id="p4">第一行 <strong>重点</strong>
+    第二行</p>
 </div>
 
 <div id="chat" data-chat-flow>
@@ -285,6 +288,27 @@
       await wait(60)
       assert('badge shows 2 annotations', badge() !== null && badge().textContent.indexOf('2') >= 0, badge() ? badge().textContent : 'no badge')
 
+      // 3a) annotated passages stay marked in the page: one numbered pin per
+      // queue entry, and the browser highlight covers both ranges.
+      await wait(220)
+      var pins = document.querySelectorAll('.dsba-pin')
+      assert('one numbered pin per queued annotation', pins.length === 2, 'pins=' + pins.length)
+      var pinRect = pins[0].getBoundingClientRect()
+      assert('annotation pin is laid out inside the viewport',
+        pinRect.width > 0 && pinRect.left >= 0 && pinRect.top >= 0 &&
+        pinRect.right <= window.innerWidth && pinRect.bottom <= window.innerHeight,
+        JSON.stringify([pinRect.left, pinRect.top, pinRect.right, pinRect.bottom]))
+      var hl = window.CSS && CSS.highlights ? CSS.highlights.get('margin-notes') : null
+      assert('annotated ranges are registered as a page highlight', hl !== null && hl.size === 2,
+        hl === null ? 'no highlight' : 'size=' + hl.size)
+      var inlineRange = plugin.__test.findQuoteRange(document.getElementById('p3'), '前缀强调后缀')
+      assert('quote locator spans inline elements', inlineRange !== null && inlineRange.toString() === '前缀强调后缀',
+        inlineRange === null ? 'not found' : inlineRange.toString())
+      var wsRange = plugin.__test.findQuoteRange(document.getElementById('p4'), '第一行 重点 第二行')
+      assert('quote locator tolerates collapsed DOM whitespace',
+        wsRange !== null && wsRange.toString().replace(/\s+/g, ' ') === '第一行 重点 第二行',
+        wsRange === null ? 'not found' : JSON.stringify(wsRange.toString()))
+
       // 3b) Esc in the popover must not let the next keyup resurrect the pill
       assert('select text for the Esc regression', selectText(document.getElementById('p1'), '证据不足'))
       await wait(80)
@@ -311,8 +335,11 @@
       assert('panel lists both annotations', rows.length === 2, 'rows=' + rows.length)
 
       // 5b) edit a queued annotation in place
-      var editBtn = rows[0].querySelector('.dsba-edit-btn')
-      assert('queued annotation has an edit button', editBtn !== null)
+      var actions = rows[0].querySelectorAll('.dsba-item-actions button')
+      assert('row keeps only the delete action', actions.length === 1 && actions[0].classList.contains('dsba-del-btn'),
+        'buttons=' + actions.length)
+      var editBtn = rows[0].querySelector('.dsba-note-btn')
+      assert('clicking the written note opens editing', editBtn !== null)
       editBtn.click()
       await wait(40)
       var editNote = document.querySelector('.dsba-panel .dsba-edit-note')
@@ -326,12 +353,30 @@
       assert('panel repaints with the edited note',
         editedRows[0].textContent.indexOf('二次编辑') >= 0, editedRows[0].textContent)
       assert('edit mode closes after save', document.querySelector('.dsba-panel .dsba-edit-note') === null)
+
+      // 5b2) clicking the numbered pin locates and selects the annotated passage;
+      // it opens the list but not the editor.
+      document.querySelector('.dsba-pin').click()
+      await wait(60)
+      assert('pin click selects its annotated passage',
+        window.getSelection().toString().indexOf('证据不足') >= 0,
+        window.getSelection().toString().slice(0, 30))
+      assert('pin click does not start editing',
+        document.querySelector('.dsba-panel .dsba-edit-note') === null)
+      // Editing starts from the note text, not from the row.
+      document.querySelectorAll('.dsba-panel .dsba-note-btn')[0].click()
+      await wait(40)
+      var pinEdit = document.querySelector('.dsba-panel .dsba-edit-note')
+      assert('note text opens its annotation for editing', pinEdit !== null && pinEdit.value.indexOf('二次编辑') >= 0,
+        pinEdit === null ? 'no edit box' : pinEdit.value)
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await wait(40)
       var storedAfterEdit = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
       assert('edited note is persisted', storedAfterEdit[0].note.indexOf('二次编辑') >= 0, storedAfterEdit[0].note)
 
       // 5c) Esc cancels the edit and leaves the note untouched
       var rows2 = document.querySelectorAll('.dsba-panel .dsba-item')
-      rows2[1].querySelector('.dsba-edit-btn').click()
+      rows2[1].querySelector('.dsba-note-btn').click()
       await wait(40)
       var editNote2 = document.querySelector('.dsba-panel .dsba-edit-note')
       assert('second annotation is editable too', editNote2 !== null)
@@ -342,6 +387,13 @@
         document.querySelector('.dsba-panel .dsba-edit-note') === null)
       var storedAfterCancel = JSON.parse(window.localStorage.getItem('dsh-margin-notes:v1:sess-1') || '[]')
       assert('cancelled edit does not change the note', storedAfterCancel[1].note === '', JSON.stringify(storedAfterCancel[1].note))
+
+      // 5d) clicking the row (quote area) reveals the annotated passage.
+      document.querySelectorAll('.dsba-panel .dsba-item')[1].click()
+      await wait(60)
+      assert('row click selects the annotated passage',
+        window.getSelection().toString().indexOf('样本量偏小') >= 0,
+        window.getSelection().toString().slice(0, 30))
 
       // 6) send to composer
       var sendBtn = document.querySelector('.dsba-panel .dsba-btn-primary')
@@ -504,11 +556,41 @@
       await wait(240)
       assert('pill hides when the selection disappears', toolbarButton() === null)
 
-      // 10) hot-reload safety: applying again takes over the old instance
-      var secondDispose = plugin.apply(window.__ctx)
+      // 9b) leave one document annotation queued for the reload-style check
+      assert('select text for the reload-style check', selectText(document.getElementById('p1'), '证据不足'))
       await wait(80)
+      toolbarButton().click()
+      await wait(40)
+      popover().querySelector('textarea').value = '刷新后仍能定位'
+      popover().querySelector('.dsba-btn-primary').click()
+      await wait(80)
+      assert('one annotation queued for the reload-style check',
+        badge() !== null && badge().textContent.indexOf('1') >= 0, badge() ? badge().textContent : 'no badge')
+
+      // 10) hot-reload safety: applying again takes over the old instance and,
+      // with no active selection, still restores pins and lets them locate.
+      var secondDispose = plugin.apply(window.__ctx)
+      await wait(500)
       assert('re-apply leaves at most one toolbar', document.querySelectorAll('.dsba-toolbar').length <= 1)
       assert('re-apply leaves at most one badge', document.querySelectorAll('.dsba-badge').length <= 1)
+      var restoredPins = document.querySelectorAll('.dsba-pin')
+      assert('pins are restored without a fresh selection', restoredPins.length === 1, 'pins=' + restoredPins.length)
+      // The harness log itself mutates the body on every assert; let that
+      // scheduled repaint land before measuring idle behaviour.
+      await wait(300)
+      var paintCount = plugin.__test.marksPaintCount()
+      var stablePin = document.querySelector('.dsba-pin')
+      await wait(700)
+      var samePin = stablePin === null || document.querySelector('.dsba-pin') === stablePin
+      assert('no background repaint loop while idle',
+        plugin.__test.marksPaintCount() === paintCount && samePin,
+        'paints=' + paintCount + '→' + plugin.__test.marksPaintCount() + ' samePin=' + samePin + ' pins=' + document.querySelectorAll('.dsba-pin').length)
+      if (restoredPins.length > 0) restoredPins[0].click()
+      await wait(150)
+      var restoredSel = window.getSelection() ? window.getSelection().toString() : ''
+      assert('pin locates the passage after re-apply (activeDoc was cleared)',
+        restoredSel.indexOf('证据不足') >= 0, JSON.stringify(restoredSel))
+      assert('programmatic locate does not resurrect the pill', toolbarButton() === null)
       dispose = secondDispose
 
       // 11) dispose removes injected UI/styles

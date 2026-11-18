@@ -8,7 +8,7 @@
 - `lib/index.js` 是有效 ESM（已写入，空插件）✅
 - 加载合约自检通过：`node --test test/contract.test.mjs`（12/12）✅ —— 逐条对照 App 0.2.1-rc.3 自己的规则，见「0.2」
 - 单元测试通过：`node --test test/format.test.mjs`（13/13）✅
-- 浏览器 harness 通过：见下面「0.5」，最后一次结果 **74 passed, 0 failed** ✅（含宿主 `Add to conversation` 胶囊避让、清单二次编辑回归）
+- 浏览器 harness 通过：见下面「0.5」，最后一次结果 **90 passed, 0 failed** ✅（含宿主 `Add to conversation` 胶囊避让、清单二次编辑回归）
 - 落点与 chip 单测：`node --test test/placement.test.mjs`（13/13）✅
 - 当前 profile：`~/.dsh/profiles/desktop`（App 0.2.2-rc.2，better-sidebar 0.30.1，`dsh.bundle.builtinTabs` 仅 `editor`）
 
@@ -38,7 +38,7 @@ python3 -m http.server 8732
 # 浏览器打开 http://127.0.0.1:8732/test/harness.html
 ```
 
-页面标题为 `HARNESS PASS`、正文末尾 `RESULT 74 passed, 0 failed` 才算通过。它覆盖：bundle 注册、插件契约、选区过滤（文档 / 助手回复 / 用户消息 / 输入框）、浮层避让与关闭、徽标计数、按 session 持久化、清单渲染、清单内二次编辑（保存 / Esc 取消）、单来源块与混合来源块（文档 + 回复）拼装、写草稿、发送后清空、`dispose` 清理样式。
+页面标题为 `HARNESS PASS`、正文末尾 `RESULT 90 passed, 0 failed` 才算通过。它覆盖：bundle 注册、插件契约、选区过滤（文档 / 助手回复 / 用户消息 / 输入框）、浮层避让与关闭、徽标计数、按 session 持久化、清单渲染、清单内二次编辑（保存 / Esc 取消）、单来源块与混合来源块（文档 + 回复）拼装、写草稿、发送后清空、`dispose` 清理样式。
 服务必须从**包根目录**起，否则 `../lib/client.js` 会 404。
 
 ## 1. 安装（官方 UI 路径，推荐）
@@ -73,7 +73,7 @@ python3 -m http.server 8732
 | 3 | 点它 → 输入一句 → `⌘Enter` | 右下角出现 `批注 1` 徽标 |
 | 4 | 再选一处加批注 | 徽标变 `批注 2` |
 | 5 | 刷新页面 | 徽标仍是 `批注 2`（localStorage 持久化） |
-| 6 | 点徽标 → 清单 | 两条都在，`↗` 能滚动定位，`✕` 能删 |
+| 6 | 点徽标 → 清单 | 两条都在，点条目能滚动定位，点批注文字能编辑，删除能删 |
 | 7 | 点「发送到输入框」 | 草稿出现批注块，焦点回到输入框，徽标消失 |
 | 8 | 回车发送 | 模型按 `Annotation 1/2` 逐条回应 |
 | 9 | 全屏打开文档重复 2–3 | 同样可用 |
